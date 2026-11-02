@@ -387,6 +387,21 @@ function speakPrompt(){
   window.speechSynthesis.speak(u);
 }
 
+function mergeTranscripts(parts){
+  const out = [];
+  for(const p of parts){
+    if(!p) continue;
+    const prev = out[out.length - 1];
+    if(prev){
+      const a = prev.toLowerCase(), b = p.toLowerCase();
+      if(b.startsWith(a)){ out[out.length - 1] = p; continue; }   // eyni cümlənin davamı
+      if(a.startsWith(b)) continue;                               // köhnə/qısa təkrar
+    }
+    out.push(p);
+  }
+  return out.join(' ').replace(/\s+/g, ' ').trim();
+}
+
 function setMicHint(html){ const h = document.getElementById('micHint'); if(h) h.innerHTML = html; }
 function clearMicTimers(){ clearTimeout(silenceTimer); clearTimeout(maxTimer); }
 
@@ -454,14 +469,13 @@ async function toggleRecording(){
   };
 
   recognition.onresult = (event) => {
+    // Android Chrome hər aralıq nəticəni ayrıca "final" kimi qaytarır (I / I sent / I sent most...).
+    // Ona görə hər dəfə bütün nəticələri yenidən yığıb təkrarları birləşdiririk.
+    const parts = [];
+    for(let i = 0; i < event.results.length; i++) parts.push(event.results[i][0].transcript.trim());
+    finalText = mergeTranscripts(parts);
     interimText = '';
-    for(let i = event.resultIndex; i < event.results.length; i++){
-      const r = event.results[i];
-      if(r.isFinal) finalText += r[0].transcript + ' ';
-      else interimText += r[0].transcript;
-    }
-    const shown = (finalText + interimText).trim();
-    if(box) box.textContent = '🗣️ "' + shown + '"';
+    if(box) box.textContent = '🗣️ "' + finalText + '"';
     // danışıqdan sonra 3 saniyə sakitlik olarsa avtomatik dayandır
     clearTimeout(silenceTimer);
     silenceTimer = setTimeout(() => { try{ recognition.stop(); }catch(e){} }, 3000);
